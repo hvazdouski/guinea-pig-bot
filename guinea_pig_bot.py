@@ -3,8 +3,6 @@ import logging
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
-from flask import Flask, request
-import threading
 
 # Настройка логирования
 logging.basicConfig(
@@ -13,20 +11,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Flask приложение для health check на Render
-flask_app = Flask(__name__)
-
-@flask_app.route('/')
-def home():
-    return "Бот работает! 🐹"
-
-@flask_app.route('/health')
-def health():
-    return "OK", 200
-
 # Загрузка базы данных растений
 def load_plants_database():
-    with open('plants_database.json', 'r', encoding='utf-8') as f:
+    # Получаем абсолютный путь к директории скрипта
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(base_dir, 'plants_database.json')
+    
+    logger.info(f"Загрузка базы данных из: {db_path}")
+    
+    with open(db_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 PLANTS_DB = load_plants_database()
@@ -138,17 +131,20 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     await start(update, context)
 
-def run_bot():
+def main():
     """Запуск бота"""
-    token = os.environ.get('GuineaPigDietBot')
+    token = os.environ.get('TELEGRAM_BOT_TOKEN')
     
     if not token:
-        logger.error("GuineaPigDietBot не найден в переменных окружения!")
+        logger.error("TELEGRAM_BOT_TOKEN не найден в переменных окружения!")
         return
     
     application = Application.builder().token(token).build()
     
+    # Обработчики команд
     application.add_handler(CommandHandler("start", start))
+    
+    # Обработчики callback запросов
     application.add_handler(CallbackQueryHandler(show_category, pattern='^category_'))
     application.add_handler(CallbackQueryHandler(show_plant_details, pattern='^plant_'))
     application.add_handler(CallbackQueryHandler(back_to_menu, pattern='^back_to_menu$'))
@@ -156,16 +152,5 @@ def run_bot():
     logger.info("Бот запущен!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
-def start_flask():
-    """Запуск Flask для health checks"""
-    port = int(os.environ.get('PORT', 5000))
-    flask_app.run(host='0.0.0.0', port=port)
-
 if __name__ == '__main__':
-    # Запускаем Flask в отдельном потоке для health checks
-    flask_thread = threading.Thread(target=start_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-    
-    # Запускаем бота
-    run_bot()
+    main()
