@@ -273,7 +273,13 @@ CATEGORIES = ["🥬 Овощи", "🌿 Травы", "🍎 Фрукты", "🍓 �
 def start(message):
     start_main_menu(message)
 
-def start_main_menu(message):
+def start_main_menu(message=None, chat_id=None):
+    # Определяем chat_id и message объект
+    if message:
+        chat_id = message.chat.id
+    elif not chat_id:
+        return
+    
     try:
         with open('start.jpg', 'rb') as welcome_image:
             photo_to_send = welcome_image
@@ -293,7 +299,7 @@ def start_main_menu(message):
     
     if photo_to_send:
         bot.send_photo(
-            chat_id=message.chat.id, 
+            chat_id=chat_id, 
             photo=photo_to_send, 
             caption=text, 
             reply_markup=markup, 
@@ -301,7 +307,7 @@ def start_main_menu(message):
         )
     else:
         bot.send_message(
-            chat_id=message.chat.id,
+            chat_id=chat_id,
             text=text,
             reply_markup=markup,
             parse_mode='HTML'
@@ -350,7 +356,7 @@ def callback(call):
 
         # 5. Возврат в главное меню
         elif call.data == "back_to_main":
-            start_main_menu(call.message)
+            start_main_menu(chat_id=call.message.chat.id)
 
         bot.answer_callback_query(call.id)
         
