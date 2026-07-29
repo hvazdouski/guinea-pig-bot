@@ -277,7 +277,7 @@ CATEGORIES = ["🥬 Овощи", "🌿 Травы", "🍎 Фрукты", "🍓 �
 @bot.message_handler(commands=['start'])
 def start(message):
     # Ссылка на приветственную картинку (можно заменить на свою)
-    welcome_image = "https://wsrv.nl/?url=https://images.unsplash.com/photo-1548767797-d8c844163c4c&w=600"
+    welcome_image = open('start.jpg', 'rb')
     
     markup = types.InlineKeyboardMarkup(row_width=2)
     for cat in CATEGORIES:
