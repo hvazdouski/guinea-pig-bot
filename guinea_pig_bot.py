@@ -326,10 +326,13 @@ def show_plant_options(chat_id, plant_name):
 
     parts = plant['parts']
     
+    # Находим категорию этого растения
+    category = plant['cat']
+    
     # ПРОВЕРКА: Если часть всего одна, сразу показываем информацию о ней
     if len(parts) == 1:
         part_name = list(parts.keys())[0]
-        show_part_info(chat_id, plant_name, part_name)
+        show_part_info(chat_id, plant_name, part_name, category) # Передаем категорию
         return
 
     # Если частей больше одной, показываем меню выбора
@@ -341,29 +344,37 @@ def show_plant_options(chat_id, plant_name):
         markup.add(types.InlineKeyboardButton(text=btn_text, callback_data=f"part_{plant_name}_{safe_part}"))
     
     markup.add(types.InlineKeyboardButton(text="📋 Вся информация сразу", callback_data=f"all_info_{plant_name}"))
-    markup.add(types.InlineKeyboardButton(text="🔙 Назад к категории", callback_data="back"))
+    # Кнопка назад теперь ведет в категорию
+    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}"))
 
     bot.send_photo(chat_id, plant['img'], caption=f"🌿 <b>{plant_name.capitalize()}</b>\nВыбери часть растения:", reply_markup=markup, parse_mode='HTML')
 
-def show_part_info(chat_id, plant_name, part_name):
+def show_part_info(chat_id, plant_name, part_name, category=None):
     plant = PLANTS_DB.get(plant_name)
     part_data = plant['parts'].get(part_name)
     
     if part_data:
         text = f"🌿 <b>{plant_name.capitalize()} ({part_name})</b>\n\n{part_data['status']}\n{part_data['info']}\n⚖️ {part_data['norm']}"
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"item_{plant_name}"))
+        
+        # Если категория передана (случай с 1 частью), идем туда. Иначе - к выбору частей.
+        back_callback = f"cat_{category}" if category else f"item_{plant_name}"
+        
+        markup.add(types.InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback))
         bot.send_message(chat_id, text, reply_markup=markup, parse_mode='HTML')
 
 def show_all_parts_info(chat_id, plant_name):
     plant = PLANTS_DB.get(plant_name)
+    category = plant['cat'] # Получаем категорию
+    
     text = f"🌿 <b>{plant_name.capitalize()} — Полный гид</b>\n\n"
     
     for part, data in plant['parts'].items():
         text += f"🔸 <b>{part.capitalize()}:</b> {data['status']}\n   {data['info']}\n   ⚖️ {data['norm']}\n\n"
         
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"item_{plant_name}"))
+    # Возврат в категорию
+    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}"))
     bot.send_message(chat_id, text, reply_markup=markup, parse_mode='HTML')
 
 # Умный поиск
