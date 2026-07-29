@@ -1,14 +1,9 @@
 import os
-import logging
 import telebot
 from telebot import types
 from thefuzz import process
 from flask import Flask, request
 from dotenv import load_dotenv
-
-# Настройка логирования
-logging.basicConfig(level=logging.INFO) # INFO достаточно для продакшена
-logger = logging.getLogger(__name__)
 
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
@@ -17,7 +12,7 @@ if not TOKEN:
 
 bot = telebot.TeleBot(TOKEN)
 
-# ПОЛНАЯ БАЗА ДАННЫХ (Без пробелов в ключах!)
+# ПОЛНАЯ БАЗА ДАННЫХ - БЕЗ ПРОБЕЛОВ В КЛЮЧАХ И ЗНАЧЕНИЯХ!
 PLANTS_DB = {
     # --- ОВОЩИ ---
     "морковь": {
@@ -181,7 +176,7 @@ PLANTS_DB = {
         "parts": {
             "мякоть": {"status": "✅ Летнее лакомство", "info": "Много воды и сахара.", "norm": "Небольшой ломтик."}
         },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=500" 
+        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=500"
     },
     "апельсин": {
         "cat": "🍎 Фрукты",
@@ -276,6 +271,12 @@ CATEGORIES = ["🥬 Овощи", "🌿 Травы", "🍎 Фрукты", "🍓 �
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    try:
+        with open('start.jpg', 'rb') as welcome_image:
+            photo_to_send = welcome_image
+    except FileNotFoundError:
+        photo_to_send = None
+    
     markup = types.InlineKeyboardMarkup(row_width=2)
     for cat in CATEGORIES:
         markup.add(types.InlineKeyboardButton(text=cat, callback_data=f"cat_{cat}"))
@@ -287,20 +288,18 @@ def start(message):
         "Просто выбери категорию ниже или напиши название продукта текстом (например: огурец, петрушка, перец), и я выдам подробную информацию!"
     )
     
-    try:
-        with open('start.jpg', 'rb') as welcome_image:
-            bot.send_photo(
-                chat_id=message.chat.id, 
-                photo=welcome_image, 
-                caption=text, 
-                reply_markup=markup, 
-                parse_mode='HTML'
-            )
-    except FileNotFoundError:
-        # Если картинки нет, бот не упадет, а просто отправит текст
+    if photo_to_send:
+        bot.send_photo(
+            chat_id=message.chat.id, 
+            photo=photo_to_send, 
+            caption=text, 
+            reply_markup=markup, 
+            parse_mode='HTML'
+        )
+    else:
         bot.send_message(
             chat_id=message.chat.id,
-            text=text + "\n\n⚠️ (Приветственная картинка не найдена)",
+            text=text,
             reply_markup=markup,
             parse_mode='HTML'
         )
@@ -308,7 +307,7 @@ def start(message):
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
     try:
-        # 1. Обработка нажатия на КАТЕГОРИЮ (включая возврат в категорию)
+        # 1. Обработка нажатия на КАТЕГОРИЮ
         if call.data.startswith("cat_"):
             category = call.data.replace("cat_", "")
             items = [name for name, data in PLANTS_DB.items() if data["cat"] == category]
@@ -318,13 +317,7 @@ def callback(call):
                 markup.add(types.InlineKeyboardButton(text=item.capitalize(), callback_data=f"item_{item}"))
             markup.add(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="back_to_main"))
             
-            # Удаляем старое сообщение (фото или текст), чтобы избежать ошибки 400
-            try:
-                bot.delete_message(call.message.chat.id, call.message.message_id)
-            except Exception:
-                pass # Игнорируем ошибку, если сообщение уже удалено
-            
-            # Отправляем новое текстовое сообщение
+            # Отправляем новое сообщение вместо редактирования
             bot.send_message(
                 chat_id=call.message.chat.id, 
                 text=f"Продукты в категории <b>{category}</b>:", 
@@ -335,10 +328,6 @@ def callback(call):
         # 2. Обработка нажатия на ПРОДУКТ
         elif call.data.startswith("item_"):
             plant_name = call.data.replace("item_", "")
-            try:
-                bot.delete_message(call.message.chat.id, call.message.message_id)
-            except Exception:
-                pass
             show_plant_options(call.message.chat.id, plant_name)
 
         # 3. Обработка выбора ЧАСТИ растения
@@ -346,48 +335,36 @@ def callback(call):
             data_parts = call.data.replace("part_", "").split("_", 1)
             plant_name = data_parts[0]
             part_name = data_parts[1].replace("_", " ")
-            try:
-                bot.delete_message(call.message.chat.id, call.message.message_id)
-            except Exception:
-                pass
             show_part_info(call.message.chat.id, plant_name, part_name)
 
         # 4. Кнопка "Вся информация"
         elif call.data.startswith("all_info_"):
             plant_name = call.data.replace("all_info_", "")
-            try:
-                bot.delete_message(call.message.chat.id, call.message.message_id)
-            except Exception:
-                pass
             show_all_parts_info(call.message.chat.id, plant_name)
 
         # 5. Возврат в главное меню
         elif call.data == "back_to_main":
-            try:
-                bot.delete_message(call.message.chat.id, call.message.message_id)
-            except Exception:
-                pass
             start(call.message)
 
+        bot.answer_callback_query(call.id)
+        
     except Exception as e:
         print(f"Ошибка в callback: {e}")
-    finally:
-        # Всегда отвечаем на callback, чтобы убрать "часики" загрузки у пользователя
-        bot.answer_callback_query(call.id)
+        bot.answer_callback_query(call.id, "Произошла ошибка")
 
-def show_plant_options(message, plant_name):
+def show_plant_options(chat_id, plant_name):
     plant = PLANTS_DB.get(plant_name)
-    if not plant: 
-        bot.send_message(message.chat.id, "Растение не найдено")
+    if not plant:
+        bot.send_message(chat_id, "Растение не найдено")
         return
-
+        
     parts = plant['parts']
     category = plant['cat']
     
     # Если часть всего одна, сразу показываем информацию
     if len(parts) == 1:
         part_name = list(parts.keys())[0]
-        show_part_info(message, plant_name, part_name, category)
+        show_part_info(chat_id, plant_name, part_name, category)
         return
 
     # Если частей больше одной, показываем меню выбора
@@ -399,20 +376,20 @@ def show_plant_options(message, plant_name):
         markup.add(types.InlineKeyboardButton(text=btn_text, callback_data=f"part_{plant_name}_{safe_part}"))
     
     markup.add(types.InlineKeyboardButton(text="📋 Вся информация сразу", callback_data=f"all_info_{plant_name}"))
-    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}_back"))
+    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}"))
 
     bot.send_photo(
-        message.chat.id, 
+        chat_id, 
         plant['img'], 
         caption=f"🌿 <b>{plant_name.capitalize()}</b>\nВыбери часть растения:", 
         reply_markup=markup, 
         parse_mode='HTML'
     )
 
-def show_part_info(message, plant_name, part_name, category=None):
+def show_part_info(chat_id, plant_name, part_name, category=None):
     plant = PLANTS_DB.get(plant_name)
     if not plant:
-        bot.send_message(message.chat.id, "Растение не найдено")
+        bot.send_message(chat_id, "Растение не найдено")
         return
         
     part_data = plant['parts'].get(part_name)
@@ -422,17 +399,17 @@ def show_part_info(message, plant_name, part_name, category=None):
         markup = types.InlineKeyboardMarkup()
         
         if category:
-            back_callback = f"cat_{category}_back"
+            back_callback = f"cat_{category}"
         else:
             back_callback = f"item_{plant_name}"
         
         markup.add(types.InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback))
-        bot.send_message(message.chat.id, text, reply_markup=markup, parse_mode='HTML')
+        bot.send_message(chat_id, text, reply_markup=markup, parse_mode='HTML')
 
-def show_all_parts_info(message, plant_name):
+def show_all_parts_info(chat_id, plant_name):
     plant = PLANTS_DB.get(plant_name)
     if not plant:
-        bot.send_message(message.chat.id, "Растение не найдено")
+        bot.send_message(chat_id, "Растение не найдено")
         return
         
     category = plant['cat']
@@ -443,10 +420,9 @@ def show_all_parts_info(message, plant_name):
         text += f"🔸 <b>{part.capitalize()}:</b> {data['status']}\n   {data['info']}\n   ⚖️ {data['norm']}\n\n"
         
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}_back"))
-    bot.send_message(message.chat.id, text, reply_markup=markup, parse_mode='HTML')
+    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}"))
+    bot.send_message(chat_id, text, reply_markup=markup, parse_mode='HTML')
 
-# Умный поиск
 @bot.message_handler(content_types=['text'])
 def handle_text_search(message):
     query = message.text.strip().lower()
@@ -457,11 +433,10 @@ def handle_text_search(message):
     match, score = process.extractOne(query, all_plants)
     
     if score > 60:
-        show_plant_options(message, match)
+        show_plant_options(message.chat.id, match)
     else:
         bot.send_message(message.chat.id, f"🤔 Я не нашел '{message.text}'. Попробуй написать по-другому или выбери категорию.")
 
-# Webhook логика
 app = Flask(__name__)
 
 @app.route('/', methods=['POST'])
@@ -478,11 +453,9 @@ def home():
 if __name__ == '__main__':
     WEBHOOK_URL = os.getenv('WEBHOOK_URL')
     if WEBHOOK_URL:
-        logger.info(f"Запуск через Webhook: {WEBHOOK_URL}")
         bot.remove_webhook()
         bot.set_webhook(url=WEBHOOK_URL)
         app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
     else:
-        logger.info("Запуск через Polling (локальный режим)")
         bot.remove_webhook()
         bot.polling(none_stop=True, interval=0)
