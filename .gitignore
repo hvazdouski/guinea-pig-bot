@@ -1,11 +1,29 @@
-# Игнорировать файл с токеном
-.env
-
-# Игнорировать системные файлы Python
+```
+# Python
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 
-# Игнорировать виртуальное окружение (если будешь создавать)
+# Environment
+.venv/
 venv/
-env/
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+
+# Editors
+.vscode/
+.idea/
+
+# Build artifacts
+build/
+dist/
+```

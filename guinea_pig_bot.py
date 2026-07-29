@@ -271,6 +271,9 @@ CATEGORIES = ["🥬 Овощи", "🌿 Травы", "🍎 Фрукты", "🍓 �
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    start_main_menu(message)
+
+def start_main_menu(message):
     try:
         with open('start.jpg', 'rb') as welcome_image:
             photo_to_send = welcome_image
@@ -317,11 +320,11 @@ def callback(call):
                 markup.add(types.InlineKeyboardButton(text=item.capitalize(), callback_data=f"item_{item}"))
             markup.add(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="back_to_main"))
             
-            # Отправляем новое сообщение вместо редактирования
-            bot.send_message(
-                chat_id=call.message.chat.id, 
-                text=f"Продукты в категории <b>{category}</b>:", 
-                reply_markup=markup, 
+            bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text=f"Продукты в категории <b>{category}</b>:",
+                reply_markup=markup,
                 parse_mode='HTML'
             )
 
@@ -335,7 +338,10 @@ def callback(call):
             data_parts = call.data.replace("part_", "").split("_", 1)
             plant_name = data_parts[0]
             part_name = data_parts[1].replace("_", " ")
-            show_part_info(call.message.chat.id, plant_name, part_name)
+            # Получаем категорию из базы данных для корректной кнопки "Назад"
+            plant = PLANTS_DB.get(plant_name)
+            category = plant["cat"] if plant else None
+            show_part_info(call.message.chat.id, plant_name, part_name, category)
 
         # 4. Кнопка "Вся информация"
         elif call.data.startswith("all_info_"):
@@ -344,7 +350,7 @@ def callback(call):
 
         # 5. Возврат в главное меню
         elif call.data == "back_to_main":
-            start(call.message)
+            start_main_menu(call.message)
 
         bot.answer_callback_query(call.id)
         
@@ -364,7 +370,7 @@ def show_plant_options(chat_id, plant_name):
     # Если часть всего одна, сразу показываем информацию
     if len(parts) == 1:
         part_name = list(parts.keys())[0]
-        show_part_info(chat_id, plant_name, part_name, category)
+        show_part_info(chat_id, plant_name, part_name, category=category)
         return
 
     # Если частей больше одной, показываем меню выбора
@@ -378,11 +384,10 @@ def show_plant_options(chat_id, plant_name):
     markup.add(types.InlineKeyboardButton(text="📋 Вся информация сразу", callback_data=f"all_info_{plant_name}"))
     markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}"))
 
-    bot.send_photo(
-        chat_id, 
-        plant['img'], 
-        caption=f"🌿 <b>{plant_name.capitalize()}</b>\nВыбери часть растения:", 
-        reply_markup=markup, 
+    bot.send_message(
+        chat_id,
+        f"🌿 <b>{plant_name.capitalize()}</b>\nВыбери часть растения:",
+        reply_markup=markup,
         parse_mode='HTML'
     )
 
