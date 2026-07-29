@@ -1,472 +1,171 @@
+import json
+import logging
 import os
-import telebot
-from telebot import types
-from thefuzz import process
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 from flask import Flask, request
-from dotenv import load_dotenv
+import threading
 
-load_dotenv()
-TOKEN = os.getenv('TOKEN')
-if not TOKEN:
-    raise Exception("Токен не найден!")
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-bot = telebot.TeleBot(TOKEN)
+# Flask приложение для health check на Render
+flask_app = Flask(__name__)
 
-# ПОЛНАЯ БАЗА ДАННЫХ - БЕЗ ПРОБЕЛОВ В КЛЮЧАХ И ЗНАЧЕНИЯХ!
-PLANTS_DB = {
-    # --- ОВОЩИ ---
-    "морковь": {
-        "cat": "🥬 Овощи",
-        "parts": {
-            "корнеплод": {"status": "✅ Можно, но с осторожностью", "info": "Много сахара и витамина А.", "norm": "1-2 раза в неделю."},
-            "ботва": {"status": "✅ Отлично", "info": "Полезная зелень, богата калием.", "norm": "Ежедневно, небольшой пучок."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1598170845058-32b9d6a5da37&w=500"
-    },
-    "огурец": {
-        "cat": "🥬 Овощи",
-        "parts": {
-            "плод": {"status": "✅ Можно", "info": "Мало пользы, много воды. Кожуру лучше чистить.", "norm": "Ежедневно, но немного."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1449300079323-02e209d9d3a6&w=500"
-    },
-    "болгарский перец": {
-        "cat": "🥬 Овощи",
-        "parts": {
-            "плод": {"status": "🌟 Суперфуд", "info": "Главный источник витамина С. Семена убрать.", "norm": "Ежедневно."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1563565375-f3fdf5efa26f&w=500"
-    },
-    "кабачок": {
-        "cat": "🥬 Овощи",
-        "parts": {
-            "плод": {"status": "✅ Отлично", "info": "Гипоаллергенный и легкий.", "norm": "Можно ежедневно."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1565257965415-5c62641eb6c9&w=500"
-    },
-    "тыква": {
-        "cat": "🥬 Овощи",
-        "parts": {
-            "мякоть": {"status": "✅ Можно", "info": "Полезна для шерсти.", "norm": "1-2 раза в неделю."},
-            "семечки": {"status": "⚠️ Редко", "info": "Очищенные, как лакомство.", "norm": "1-2 штучки."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1506917728037-b6af011dc3d3&w=500"
-    },
-    "помидор": {
-        "cat": "🥬 Овощи",
-        "parts": {
-            "мякоть": {"status": "✅ Можно", "info": "Только спелые красные плоды.", "norm": "Редко."},
-            "ботва/листья": {"status": "❌ НЕЛЬЗЯ", "info": "Содержат соланин.", "norm": "Никогда."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1592924357228-91a4daadcfea&w=500"
-    },
-    "картофель": {
-        "cat": "🆘 SOS",
-        "parts": {
-            "клубень": {"status": "❌ НЕЛЬЗЯ", "info": "Токсичен в сыром виде.", "norm": "Никогда."},
-            "ботва": {"status": "☠️ ЯД", "info": "Смертельно опасна.", "norm": "КАТЕГОРИЧЕСКИ НЕЛЬЗЯ."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1518977676601-b53f82aba655&w=500"
-    },
-    "салат айсберг": {
-        "cat": "🥬 Овощи",
-        "parts": {
-            "листья": {"status": "⚠️ Мало пользы", "info": "Почти одна вода, может вызвать диарею.", "norm": "Очень редко."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1&w=500"
-    },
-    "капуста": {
-        "cat": "🥬 Овощи",
-        "parts": {
-            "листья": {"status": "❌ Опасно", "info": "Вызывает сильное газообразование.", "norm": "Исключить."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1550170560-14e4f775c218&w=500"
-    },
-    # --- ТРАВЫ И ЗЕЛЕНЬ ---
-    "петрушка": {
-        "cat": "🌿 Травы",
-        "parts": {
-            "листья": {"status": "⚠️ Ограниченно", "info": "Много кальция (риск камней).", "norm": "1-2 раза в неделю."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1626078292069-3001c7d180f6&w=500"
-    },
-    "укроп": {
-        "cat": "🌿 Травы",
-        "parts": {
-            "зелень": {"status": "✅ Отлично", "info": "Улучшает пищеварение.", "norm": "Ежедневно."}
-        },
-        "img": "https://wsrv.nl/?url=https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Dill_leaf.jpg/640px-Dill_leaf.jpg"
-    },
-    "базилик": {
-        "cat": "🌿 Травы",
-        "parts": {
-            "листья": {"status": "✅ Можно", "info": "Ароматная приправа, полезна для иммунитета.", "norm": "Небольшой листочек."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1618164436240-44736640d540&w=500"
-    },
-    "мята": {
-        "cat": "🌿 Травы",
-        "parts": {
-            "листья": {"status": "✅ Можно", "info": "Освежает дыхание, успокаивает.", "norm": "1-2 веточки."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1626462132938-1f44459245c3&w=500"
-    },
-    "шпинат": {
-        "cat": "🌿 Травы",
-        "parts": {
-            "листья": {"status": "⚠️ Осторожно", "info": "Много щавелевой кислоты.", "norm": "Не чаще 1 раза в неделю."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1576045057995-568f588f82fb&w=500"
-    },
-    "люцерна": {
-        "cat": "🌿 Травы",
-        "parts": {
-            "свежая трава": {"status": "⚠️ Только малышам", "info": "Слишком много кальция для взрослых.", "norm": "Только до 6 месяцев."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1591189863430-ab87e120f312&w=500"
-    },
-    "одуванчик": {
-        "cat": "🌿 Травы",
-        "parts": {
-            "цветы": {"status": "✅ Можно всё", "info": "Сладкие и любимые.", "norm": "Ежедневно."},
-            "листья": {"status": "✅ Можно всё", "info": "Горчат, но очень полезны.", "norm": "Ежедневно."},
-            "стебли": {"status": "✅ Можно всё", "info": "Содержат молочко.", "norm": "Ежедневно."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1470240731273-7821a6eeb6bd&w=500"
-    },
-    "ромашка": {
-        "cat": "🌿 Травы",
-        "parts": {
-            "цветы": {"status": "✅ Полезно", "info": "Успокаивает животик.", "norm": "Как лакомство."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1606041008023-472dfb5e530f&w=500"
-    },
-    # --- ФРУКТЫ ---
-    "яблоко": {
-        "cat": "🍎 Фрукты",
-        "parts": {
-            "мякоть": {"status": "✅ Можно", "info": "Без косточек!", "norm": "1-2 раза в неделю."},
-            "косточки": {"status": "❌ НЕЛЬЗЯ", "info": "Содержат цианид.", "norm": "Никогда."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6&w=500"
-    },
-    "груша": {
-        "cat": "🍎 Фрукты",
-        "parts": {
-            "мякоть": {"status": "✅ Можно", "info": "Мягкая и сладкая.", "norm": "1 раз в неделю."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1615484477778-ca3b77940c25&w=500"
-    },
-    "киви": {
-        "cat": "🍎 Фрукты",
-        "parts": {
-            "мякоть": {"status": "🌟 Витамин С", "info": "Очень полезен, но кислый.", "norm": "Кружочек раз в неделю."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1585059895524-72359e06133a&w=500"
-    },
-    "ананас": {
-        "cat": "🍎 Фрукты",
-        "parts": {
-            "мякоть": {"status": "✅ Редко", "info": "Содержит ферменты для ЖКТ.", "norm": "Маленький кусочек."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1550258987-190a2d41a8ba&w=500"
-    },
-    "дыня": {
-        "cat": "🍎 Фрукты",
-        "parts": {
-            "мякоть": {"status": "✅ Летнее лакомство", "info": "Много воды и сахара.", "norm": "Небольшой ломтик."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=500"
-    },
-    "апельсин": {
-        "cat": "🍎 Фрукты",
-        "parts": {
-            "мякоть": {"status": "⚠️ Цитрус", "info": "Может раздражать желудок.", "norm": "Долька раз в 2 недели."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1547514701-42782101795e&w=500"
-    },
-    "банан": {
-        "cat": "🍎 Фрукты",
-        "parts": {
-            "мякоть": {"status": "⚠️ Редко", "info": "Очень сладкий, вызывает запоры.", "norm": "Раз в месяц."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1571771896612-424bafef6551&w=500"
-    },
-    # --- ЯГОДЫ ---
-    "клубника": {
-        "cat": "🍓 Ягоды",
-        "parts": {
-            "ягода": {"status": "✅ Любимое", "info": "Свинки обожают запах.", "norm": "1 ягодка в неделю."},
-            "листья": {"status": "✅ Полезно", "info": "Можно сушить для чая.", "norm": "Небольшой пучок."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1464965911861-746a04b4bca6&w=500"
-    },
-    "черника": {
-        "cat": "🍓 Ягоды",
-        "parts": {
-            "ягода": {"status": "✅ Суперфуд", "info": "Полезна для зрения и сердца.", "norm": "3-5 ягодок."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1498557850523-fd3d118b962e&w=500"
-    },
-    "малина": {
-        "cat": "🍓 Ягоды",
-        "parts": {
-            "ягода": {"status": "✅ Можно", "info": "Сладкая и ароматная.", "norm": "2-3 ягодки."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1577069861033-55d04cec4ef5&w=500"
-    },
-    "голубика": {
-        "cat": "🍓 Ягоды",
-        "parts": {
-            "ягода": {"status": "✅ Безопасно", "info": "Меньше сахара, чем в других ягодах.", "norm": "Небольшая горсть."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1498557850523-fd3d118b962e&w=500"
-    },
-    "ежевика": {
-        "cat": "🍓 Ягоды",
-        "parts": {
-            "ягода": {"status": "✅ Можно", "info": "Богата антиоксидантами.", "norm": "2-3 ягодки."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1615485925763-867862f8021a&w=500"
-    },
-    "смородина": {
-        "cat": "🍓 Ягоды",
-        "parts": {
-            "ягода": {"status": "⚠️ Кисло", "info": "Черная или красная.", "norm": "Веточка с ягодами."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1596363505729-4190a9506133&w=500"
-    },
-    # --- ЗАПРЕЩЕНО (SOS) ---
-    "авокадо": {
-        "cat": "🆘 SOS",
-        "parts": {
-            "мякоть": {"status": "☠️ СМЕРТЕЛЬНО", "info": "Токсичен для сердца.", "norm": "НИКОГДА."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1523049673857-eb18f1d7b578&w=500"
-    },
-    "лук": {
-        "cat": "🆘 SOS",
-        "parts": {
-            "луковица": {"status": "☠️ ЯД", "info": "Разрушает эритроциты.", "norm": "НИКОГДА."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb&w=500"
-    },
-    "шоколад": {
-        "cat": "🆘 SOS",
-        "parts": {
-            "продукт": {"status": "☠️ ОПАСНО", "info": "Нарушает работу сердца.", "norm": "НИКОГДА."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1511381939415-e44015466834&w=500"
-    },
-    "хлеб": {
-        "cat": "🆘 SOS",
-        "parts": {
-            "продукт": {"status": "❌ Нельзя", "info": "Вызывает вздутие.", "norm": "НИКОГДА."}
-        },
-        "img": "https://wsrv.nl/?url=https://images.unsplash.com/photo-1509440159596-0249088772ff&w=500"
-    }
+@flask_app.route('/')
+def home():
+    return "Бот работает! 🐹"
+
+@flask_app.route('/health')
+def health():
+    return "OK", 200
+
+# Загрузка базы данных растений
+def load_plants_database():
+    with open('plants_database.json', 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+PLANTS_DB = load_plants_database()
+
+# Категории на русском
+CATEGORY_NAMES = {
+    'herbs': '🌿 Травы',
+    'vegetables': '🥕 Овощи',
+    'fruits': '🍎 Фрукты',
+    'berries': '🫐 Ягоды'
 }
 
-CATEGORIES = ["🥬 Овощи", "🌿 Травы", "🍎 Фрукты", "🍓 Ягоды", "🆘 SOS"]
-
-@bot.message_handler(commands=['start'])
-def start(message):
-    start_main_menu(message)
-
-def start_main_menu(message=None, chat_id=None):
-    # Определяем chat_id и message объект
-    if message:
-        chat_id = message.chat.id
-    elif not chat_id:
-        return
-    
-    try:
-        with open('start.jpg', 'rb') as welcome_image:
-            photo_to_send = welcome_image
-    except FileNotFoundError:
-        photo_to_send = None
-    
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    for cat in CATEGORIES:
-        markup.add(types.InlineKeyboardButton(text=cat, callback_data=f"cat_{cat}"))
-        
-    text = (
-        "🐹 <b>Привет! Я бот-помощник по питанию морских свинок.</b>\n\n"
-        "Я помогу тебе понять, можно ли твоему питомцу то или иное растение, овощ, фрукт или ягоду, и в каком количестве.\n\n"
-        "🔍 Как пользоваться:\n\n"
-        "Просто выбери категорию ниже или напиши название продукта текстом (например: огурец, петрушка, перец), и я выдам подробную информацию!"
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /start"""
+    welcome_text = (
+        "🐹 Добро пожаловать в бота о питании морских свинок!\n\n"
+        "Здесь вы найдете информацию о том, какие растения можно давать вашим питомцам.\n\n"
+        "Выберите категорию:"
     )
     
-    if photo_to_send:
-        bot.send_photo(
-            chat_id=chat_id, 
-            photo=photo_to_send, 
-            caption=text, 
-            reply_markup=markup, 
-            parse_mode='HTML'
-        )
-    else:
-        bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=markup,
-            parse_mode='HTML'
-        )
+    keyboard = [
+        [InlineKeyboardButton(CATEGORY_NAMES['herbs'], callback_data='category_herbs')],
+        [InlineKeyboardButton(CATEGORY_NAMES['vegetables'], callback_data='category_vegetables')],
+        [InlineKeyboardButton(CATEGORY_NAMES['fruits'], callback_data='category_fruits')],
+        [InlineKeyboardButton(CATEGORY_NAMES['berries'], callback_data='category_berries')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup)
 
-@bot.callback_query_handler(func=lambda call: True)
-def callback(call):
-    try:
-        # 1. Обработка нажатия на КАТЕГОРИЮ
-        if call.data.startswith("cat_"):
-            category = call.data.replace("cat_", "")
-            items = [name for name, data in PLANTS_DB.items() if data["cat"] == category]
-            
-            markup = types.InlineKeyboardMarkup(row_width=2)
-            for item in items:
-                markup.add(types.InlineKeyboardButton(text=item.capitalize(), callback_data=f"item_{item}"))
-            markup.add(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="back_to_main"))
-            
-            bot.edit_message_text(
-                chat_id=call.message.chat.id,
-                message_id=call.message.message_id,
-                text=f"Продукты в категории <b>{category}</b>:",
-                reply_markup=markup,
-                parse_mode='HTML'
+async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает список растений в категории"""
+    query = update.callback_query
+    await query.answer()
+    
+    category_key = query.data.replace('category_', '')
+    plants = PLANTS_DB.get(category_key, [])
+    
+    if not plants:
+        await query.edit_message_text("В этой категории пока нет растений.")
+        return
+    
+    keyboard = []
+    for i, plant in enumerate(plants):
+        button_text = plant['name']
+        callback_data = f"plant_{category_key}_{i}"
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+    
+    keyboard.append([InlineKeyboardButton("⬅️ Назад в меню", callback_data='back_to_menu')])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        f"{CATEGORY_NAMES[category_key]}:\n\nВыберите растение:",
+        reply_markup=reply_markup
+    )
+
+async def show_plant_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает детальную информацию о растении"""
+    query = update.callback_query
+    await query.answer()
+    
+    parts = query.data.split('_')
+    category_key = parts[1]
+    plant_index = int(parts[2])
+    
+    plants = PLANTS_DB.get(category_key, [])
+    if plant_index >= len(plants):
+        await query.edit_message_text("Растение не найдено.")
+        return
+    
+    plant = plants[plant_index]
+    
+    details_text = (
+        f"🌱 *{plant['name']}*\n\n"
+        f"✅ *Польза:*\n{plant['benefits']}\n\n"
+        f"⚠️ *Вред/Предостережения:*\n{plant['harm']}\n\n"
+        f"📏 *Разрешенное количество:*\n{plant['amount']}"
+    )
+    
+    if plant.get('photo_url'):
+        try:
+            await query.edit_message_media(
+                media={'type': 'photo', 'media': plant['photo_url']},
+                reply_markup=None
             )
-
-        # 2. Обработка нажатия на ПРОДУКТ
-        elif call.data.startswith("item_"):
-            plant_name = call.data.replace("item_", "")
-            show_plant_options(call.message.chat.id, plant_name)
-
-        # 3. Обработка выбора ЧАСТИ растения
-        elif call.data.startswith("part_"):
-            data_parts = call.data.replace("part_", "").split("_", 1)
-            plant_name = data_parts[0]
-            part_name = data_parts[1].replace("_", " ")
-            # Получаем категорию из базы данных для корректной кнопки "Назад"
-            plant = PLANTS_DB.get(plant_name)
-            category = plant["cat"] if plant else None
-            show_part_info(call.message.chat.id, plant_name, part_name, category)
-
-        # 4. Кнопка "Вся информация"
-        elif call.data.startswith("all_info_"):
-            plant_name = call.data.replace("all_info_", "")
-            show_all_parts_info(call.message.chat.id, plant_name)
-
-        # 5. Возврат в главное меню
-        elif call.data == "back_to_main":
-            start_main_menu(chat_id=call.message.chat.id)
-
-        bot.answer_callback_query(call.id)
-        
-    except Exception as e:
-        print(f"Ошибка в callback: {e}")
-        bot.answer_callback_query(call.id, "Произошла ошибка")
-
-def show_plant_options(chat_id, plant_name):
-    plant = PLANTS_DB.get(plant_name)
-    if not plant:
-        bot.send_message(chat_id, "Растение не найдено")
-        return
-        
-    parts = plant['parts']
-    category = plant['cat']
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=details_text,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки фото: {e}")
+            await query.edit_message_text(details_text, parse_mode='Markdown')
+    else:
+        await query.edit_message_text(details_text, parse_mode='Markdown')
     
-    # Если часть всего одна, сразу показываем информацию
-    if len(parts) == 1:
-        part_name = list(parts.keys())[0]
-        show_part_info(chat_id, plant_name, part_name, category=category)
-        return
-
-    # Если частей больше одной, показываем меню выбора
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    
-    for part_name in parts.keys():
-        btn_text = part_name.capitalize()
-        safe_part = part_name.replace(" ", "_")
-        markup.add(types.InlineKeyboardButton(text=btn_text, callback_data=f"part_{plant_name}_{safe_part}"))
-    
-    markup.add(types.InlineKeyboardButton(text="📋 Вся информация сразу", callback_data=f"all_info_{plant_name}"))
-    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}"))
-
-    bot.send_message(
-        chat_id,
-        f"🌿 <b>{plant_name.capitalize()}</b>\nВыбери часть растения:",
-        reply_markup=markup,
-        parse_mode='HTML'
+    keyboard = [[InlineKeyboardButton("⬅️ Назад к списку", callback_data=f'category_{category_key}')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="Вернуться к списку:",
+        reply_markup=reply_markup
     )
 
-def show_part_info(chat_id, plant_name, part_name, category=None):
-    plant = PLANTS_DB.get(plant_name)
-    if not plant:
-        bot.send_message(chat_id, "Растение не найдено")
-        return
-        
-    part_data = plant['parts'].get(part_name)
-    
-    if part_data:
-        text = f"🌿 <b>{plant_name.capitalize()} ({part_name})</b>\n\n{part_data['status']}\n{part_data['info']}\n⚖️ {part_data['norm']}"
-        markup = types.InlineKeyboardMarkup()
-        
-        if category:
-            back_callback = f"cat_{category}"
-        else:
-            back_callback = f"item_{plant_name}"
-        
-        markup.add(types.InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback))
-        bot.send_message(chat_id, text, reply_markup=markup, parse_mode='HTML')
+async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Возврат в главное меню"""
+    query = update.callback_query
+    await query.answer()
+    await start(update, context)
 
-def show_all_parts_info(chat_id, plant_name):
-    plant = PLANTS_DB.get(plant_name)
-    if not plant:
-        bot.send_message(chat_id, "Растение не найдено")
-        return
-        
-    category = plant['cat']
+def run_bot():
+    """Запуск бота"""
+    token = os.environ.get('TELEGRAM_BOT_TOKEN')
     
-    text = f"🌿 <b>{plant_name.capitalize()} — Полный гид</b>\n\n"
-    
-    for part, data in plant['parts'].items():
-        text += f"🔸 <b>{part.capitalize()}:</b> {data['status']}\n   {data['info']}\n   ⚖️ {data['norm']}\n\n"
-        
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}"))
-    bot.send_message(chat_id, text, reply_markup=markup, parse_mode='HTML')
-
-@bot.message_handler(content_types=['text'])
-def handle_text_search(message):
-    query = message.text.strip().lower()
-    if query.startswith('/'): 
+    if not token:
+        logger.error("TELEGRAM_BOT_TOKEN не найден в переменных окружения!")
         return
     
-    all_plants = list(PLANTS_DB.keys())
-    match, score = process.extractOne(query, all_plants)
+    application = Application.builder().token(token).build()
     
-    if score > 60:
-        show_plant_options(message.chat.id, match)
-    else:
-        bot.send_message(message.chat.id, f"🤔 Я не нашел '{message.text}'. Попробуй написать по-другому или выбери категорию.")
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(show_category, pattern='^category_'))
+    application.add_handler(CallbackQueryHandler(show_plant_details, pattern='^plant_'))
+    application.add_handler(CallbackQueryHandler(back_to_menu, pattern='^back_to_menu$'))
+    
+    logger.info("Бот запущен!")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
-app = Flask(__name__)
-
-@app.route('/', methods=['POST'])
-def webhook():
-    json_str = request.get_data().decode('UTF-8')
-    update = telebot.types.Update.de_json(json_str)
-    bot.process_new_updates([update])
-    return 'OK', 200
-
-@app.route('/')
-def home():
-    return "🐹 Бот работает!"
+def start_flask():
+    """Запуск Flask для health checks"""
+    port = int(os.environ.get('PORT', 5000))
+    flask_app.run(host='0.0.0.0', port=port)
 
 if __name__ == '__main__':
-    WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-    if WEBHOOK_URL:
-        bot.remove_webhook()
-        bot.set_webhook(url=WEBHOOK_URL)
-        app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
-    else:
-        bot.remove_webhook()
-        bot.polling(none_stop=True, interval=0)
+    # Запускаем Flask в отдельном потоке для health checks
+    flask_thread = threading.Thread(target=start_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+    
+    # Запускаем бота
+    run_bot()
