@@ -298,47 +298,56 @@ def start(message):
         reply_markup=markup, 
         parse_mode='HTML'
     )
+
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
-    # 1. Обработка нажатия на КАТЕГОРИЮ (включая кнопку "Назад в категорию")
-    if call.data.startswith("cat_"):
-        # Убираем префикс и лишние пробелы по краям
-        category = call.data.replace("cat_", "").strip()
+    # 1. Обработка нажатия на КАТЕГОРИЮ
+    if call.data.startswith("cat_") and not call.data.endswith("_back_to_cat"):
+        category = call.data.replace("cat_", "")
         
-        # Ищем продукты, у которых категория совпадает (также убираем пробелы для сравнения)
-        items = [name for name, data in PLANTS_DB.items() if data["cat"].strip() == category]
+        # Ищем все продукты, у которых категория совпадает с нажатой кнопкой
+        items = [name for name, data in PLANTS_DB.items() if data["cat"] == category]
         
         markup = types.InlineKeyboardMarkup(row_width=2)
         for item in items:
             markup.add(types.InlineKeyboardButton(text=item.capitalize(), callback_data=f"item_{item}"))
         markup.add(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="back_to_main"))
         
-        bot.edit_message_text(
-            chat_id=call.message.chat.id, 
-            message_id=call.message.message_id, 
-            text=f"Продукты в категории <b>{category}</b>:", 
-            reply_markup=markup, 
-            parse_mode='HTML'
-        )
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, 
+                              text=f"Продукты в категории <b>{category}</b>:", reply_markup=markup, parse_mode='HTML')
 
     # 2. Обработка нажатия на ПРОДУКТ
     elif call.data.startswith("item_"):
-        plant_name = call.data.replace("item_", "").strip()
+        plant_name = call.data.replace("item_", "")
         show_plant_options(call.message.chat.id, plant_name)
 
     # 3. Обработка выбора ЧАСТИ растения
     elif call.data.startswith("part_"):
         data_parts = call.data.replace("part_", "").split("_", 1)
-        plant_name = data_parts[0].strip()
-        part_name = data_parts[1].replace("_", " ").strip()
+        plant_name = data_parts[0]
+        part_name = data_parts[1].replace("_", " ")
         show_part_info(call.message.chat.id, plant_name, part_name)
 
     # 4. Кнопка "Вся информация"
     elif call.data.startswith("all_info_"):
-        plant_name = call.data.replace("all_info_", "").strip()
+        plant_name = call.data.replace("all_info_", "")
         show_all_parts_info(call.message.chat.id, plant_name)
 
-    # 5. Возврат в главное меню
+    # 5. Возврат в категорию (специальная обработка)
+    elif call.data.startswith("cat_") and call.data.endswith("_back_to_cat"):
+        category = call.data.replace("cat_", "").replace("_back_to_cat", "")
+        
+        items = [name for name, data in PLANTS_DB.items() if data["cat"] == category]
+        
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        for item in items:
+            markup.add(types.InlineKeyboardButton(text=item.capitalize(), callback_data=f"item_{item}"))
+        markup.add(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="back_to_main"))
+        
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, 
+                              text=f"Продукты в категории <b>{category}</b>:", reply_markup=markup, parse_mode='HTML')
+
+    # 6. Возврат в главное меню
     elif call.data == "back_to_main":
         start(call.message)
 
@@ -354,7 +363,7 @@ def show_plant_options(chat_id, plant_name):
     # ПРОВЕРКА: Если часть всего одна, сразу показываем информацию о ней
     if len(parts) == 1:
         part_name = list(parts.keys())[0]
-        show_part_info(chat_id, plant_name, part_name, category) # Передаем категорию
+        show_part_info(chat_id, plant_name, part_name, category)
         return
 
     # Если частей больше одной, показываем меню выбора
@@ -366,8 +375,8 @@ def show_plant_options(chat_id, plant_name):
         markup.add(types.InlineKeyboardButton(text=btn_text, callback_data=f"part_{plant_name}_{safe_part}"))
     
     markup.add(types.InlineKeyboardButton(text="📋 Вся информация сразу", callback_data=f"all_info_{plant_name}"))
-    # Кнопка назад теперь ведет в категорию
-    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}"))
+    # Кнопка назад теперь ведет в категорию с уникальным идентификатором
+    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}_back_to_cat"))
 
     bot.send_photo(chat_id, plant['img'], caption=f"🌿 <b>{plant_name.capitalize()}</b>\nВыбери часть растения:", reply_markup=markup, parse_mode='HTML')
 
@@ -379,15 +388,18 @@ def show_part_info(chat_id, plant_name, part_name, category=None):
         text = f"🌿 <b>{plant_name.capitalize()} ({part_name})</b>\n\n{part_data['status']}\n{part_data['info']}\n⚖️ {part_data['norm']}"
         markup = types.InlineKeyboardMarkup()
         
-        # Если категория передана (случай с 1 частью), идем туда. Иначе - к выбору частей.
-        back_callback = f"cat_{category}" if category else f"item_{plant_name}"
+        # Если категория передана, возвращаемся в категорию
+        if category:
+            back_callback = f"cat_{category}_back_to_cat"
+        else:
+            back_callback = f"item_{plant_name}"
         
         markup.add(types.InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback))
         bot.send_message(chat_id, text, reply_markup=markup, parse_mode='HTML')
 
 def show_all_parts_info(chat_id, plant_name):
     plant = PLANTS_DB.get(plant_name)
-    category = plant['cat'] # Получаем категорию
+    category = plant['cat']
     
     text = f"🌿 <b>{plant_name.capitalize()} — Полный гид</b>\n\n"
     
@@ -395,8 +407,8 @@ def show_all_parts_info(chat_id, plant_name):
         text += f"🔸 <b>{part.capitalize()}:</b> {data['status']}\n   {data['info']}\n   ⚖️ {data['norm']}\n\n"
         
     markup = types.InlineKeyboardMarkup()
-    # Возврат в категорию
-    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}"))
+    # Возврат в категорию с уникальным идентификатором
+    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}_back_to_cat"))
     bot.send_message(chat_id, text, reply_markup=markup, parse_mode='HTML')
 
 # Умный поиск
