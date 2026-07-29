@@ -297,7 +297,8 @@ def start(message):
         caption=text, 
         reply_markup=markup, 
         parse_mode='HTML'
-
+    )
+    
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
     if call.data.startswith("cat_"):
