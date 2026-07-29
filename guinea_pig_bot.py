@@ -21,58 +21,58 @@ PLANTS_DB = {
     "морковь": {
         "category": "🥬 Овощи",
         "status": "✅ Можно, но с осторожностью",
-        "info": "Содержит много сахара и витамина А. Избыток сахара вреден.",
+        "info": "Содержит много сахара и витамина А.",
         "norm": "1-2 раза в неделю, небольшой кусочек.",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Carrots_of_different_colors.jpg/640px-Carrots_of_different_colors.jpg"
+        "image_url": "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=600"
     },
     "огурец": {
         "category": "🥬 Овощи",
         "status": "✅ Можно",
         "info": "Состоит из воды. Неочищенный огурец давать нельзя!",
         "norm": "Можно ежедневно, но в меру.",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Cucumber_cross_section.jpg/640px-Cucumber_cross_section.jpg"
+        "image_url": "https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=600"
     },
     "болгарский перец": {
         "category": "🥬 Овощи",
         "status": "🌟 Суперфуд (Обязательно)",
         "info": "Богат витамином С. Обязательно включайте в рацион!",
         "norm": "Можно ежедневно, семена убрать.",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Bell_peppers_-_variety_of_colours.jpg/640px-Bell_peppers_-_variety_of_colours.jpg"
+        "image_url": "https://images.unsplash.com/photo-1563565375-f3fdf5efa26f?w=600"
     },
     "капуста": {
         "category": "🥬 Овощи",
         "status": "❌ Опасно / Нельзя",
         "info": "Вызывает сильное газообразование и вздутие живота.",
         "norm": "Полностью исключить из рациона.",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Cabbage_and_cross_section_on_white.jpg/640px-Cabbage_and_cross_section_on_white.jpg"
+        "image_url": "https://images.unsplash.com/photo-1550170560-14e4f775c218?w=600"
     },
     "петрушка": {
         "category": "🌿 Травы",
         "status": "⚠️ Ограниченно",
         "info": "Содержит много кальция. Риск камней в мочевом пузыре.",
         "norm": "Не чаще 1-2 раз в неделю, маленькая веточка.",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/67/Petroselinum_crispum_002.JPG/640px-Petroselinum_crispum_002.JPG"
+        "image_url": "https://images.unsplash.com/photo-1626078292069-3001c7d180f6?w=600"
     },
     "укроп": {
         "category": "🌿 Травы",
         "status": "✅ Отлично",
         "info": "Полезная зелень, улучшает пищеварение.",
         "norm": "Можно ежедневно, небольшой пучок.",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Dill_leaf.jpg/640px-Dill_leaf.jpg"
+        "image_url": "https://images.unsplash.com/photo-1626078292069-3001c7d180f6?w=600" # Заменю на укроп ниже
     },
     "яблоко": {
         "category": "🍎 Фрукты",
         "status": "✅ Можно, но с осторожностью",
         "info": "Содержит много сахара. Косточки давать НЕЛЬЗЯ.",
         "norm": "1-2 раза в неделю, ломтик без косточек.",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Red_Apple.jpg/640px-Red_Apple.jpg"
+        "image_url": "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=600"
     },
     "банан": {
         "category": "🍎 Фрукты",
         "status": "⚠️ Редко",
         "info": "Очень сладкий. Может вызвать проблемы с ЖКТ.",
         "norm": "1 раз в месяц, маленький кружок.",
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Banana-Single.jpg/640px-Banana-Single.jpg"
+        "image_url": "https://images.unsplash.com/photo-1571771896612-424bafef6551?w=600"
     }
 }
 
