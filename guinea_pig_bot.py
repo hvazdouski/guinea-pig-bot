@@ -1,3 +1,4 @@
+from flask import Flask, request
 import os
 from dotenv import load_dotenv
 import telebot
@@ -118,20 +119,30 @@ def callback_worker(call):
 # Функция для показа информации о растении
 def show_plant_info(chat_id, plant_name, msg_id=None):
     plant = PLANTS_DB.get(plant_name)
-    if plant:
-        response = (
-            f"🌿 <b>{plant_name.capitalize()}</b>\n\n"
-            f"📊 <b>Статус:</b> {plant['status']}\n"
-            f"ℹ️ <b>Информация:</b> {plant['info']}\n"
-            f"⚖️ <b>Норма потребления:</b> {plant['norm']}"
+    if not plant:
+        return
+        
+    response_text = (
+        f"🌿 <b>{plant_name.capitalize()}</b>\n\n"
+        f"📊 <b>Статус:</b> {plant['status']}\n"
+        f"ℹ️ <b>Информация:</b> {plant['info']}\n"
+        f"⚖️ <b>Норма потребления:</b> {plant['norm']}"
+    )
+    
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(text="🔙 Выбрать другой", callback_data="back_to_menu"))
+
+    try:
+        bot.send_photo(
+            chat_id=chat_id, 
+            photo=plant['image_url'], 
+            caption=response_text, 
+            reply_markup=markup, 
+            parse_mode='HTML'
         )
-        # Если это ответ на кнопку, редактируем сообщение, если текст - отправляем новое
-        if msg_id:
-            markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton(text="🔙 Выбрать другой", callback_data="back_to_menu"))
-            bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=response, reply_markup=markup, parse_mode='HTML')
-        else:
-            bot.send_message(chat_id, response, parse_mode='HTML')
+    except Exception as e:
+        print(f"Ошибка фото: {e}")
+        bot.send_message(chat_id, response_text, reply_markup=markup, parse_mode='HTML')
 
 # Обработчик текстовых сообщений (Умный поиск)
 @bot.message_handler(content_types=['text'])
@@ -152,7 +163,34 @@ def handle_text(message):
 
 if __name__ == '__main__':
     print("Умный бот запущен...")
-    bot.polling(none_stop=True)
+
+# === НАСТРОЙКА WEBHOOK ДЛЯ RENDER ===
+app = Flask(__name__)
+
+@app.route('/', methods=['POST'])
+def webhook():
+    """Этот адрес будет принимать сообщения от Telegram"""
+    json_str = request.get_data().decode('UTF-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return 'OK', 200
+
+@app.route('/')
+def home():
+    """Простая заглушка для проверки работы сервиса"""
+    return "🐹 Бот для морских свинок работает!"
+
+if __name__ == '__main__':
+    # Устанавливаем вебхук при запуске
+    WEBHOOK_URL = os.getenv('WEBHOOK_URL')
+    if WEBHOOK_URL:
+        bot.remove_webhook()
+        bot.set_webhook(url=WEBHOOK_URL)
+        print(f"Webhook установлен на: {WEBHOOK_URL}")
+    
+    # Запускаем сервер на порту, который дает Render
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
 
 
 
