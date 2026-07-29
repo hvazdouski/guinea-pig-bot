@@ -276,13 +276,6 @@ CATEGORIES = ["🥬 Овощи", "🌿 Травы", "🍎 Фрукты", "🍓 �
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    try:
-        with open('start.jpg', 'rb') as welcome_image:
-            photo_to_send = welcome_image
-    except FileNotFoundError:
-        photo_to_send = None
-        logger.warning("Файл start.jpg не найден")
-    
     markup = types.InlineKeyboardMarkup(row_width=2)
     for cat in CATEGORIES:
         markup.add(types.InlineKeyboardButton(text=cat, callback_data=f"cat_{cat}"))
@@ -291,56 +284,33 @@ def start(message):
         "🐹 <b>Привет! Я бот-помощник по питанию морских свинок.</b>\n\n"
         "Я помогу тебе понять, можно ли твоему питомцу то или иное растение, овощ, фрукт или ягоду, и в каком количестве.\n\n"
         "🔍 Как пользоваться:\n\n"
-        "Просто выбери категорию ниже или напиши название продукта текстом (например: огурец, петрушка, перец), и я выдам подробную информацию о пользе, вреде и норме потребления!"
+        "Просто выбери категорию ниже или напиши название продукта текстом (например: огурец, петрушка, перец), и я выдам подробную информацию!"
     )
     
-    if photo_to_send:
-        bot.send_photo(
-            chat_id=message.chat.id, 
-            photo=photo_to_send, 
-            caption=text, 
-            reply_markup=markup, 
-            parse_mode='HTML'
-        )
-    else:
+    try:
+        with open('start.jpg', 'rb') as welcome_image:
+            bot.send_photo(
+                chat_id=message.chat.id, 
+                photo=welcome_image, 
+                caption=text, 
+                reply_markup=markup, 
+                parse_mode='HTML'
+            )
+    except FileNotFoundError:
+        # Если картинки нет, бот не упадет, а просто отправит текст
         bot.send_message(
             chat_id=message.chat.id,
-            text=text,
+            text=text + "\n\n⚠️ (Приветственная картинка не найдена)",
             reply_markup=markup,
             parse_mode='HTML'
         )
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
-    logger.debug(f"Получен callback: {call.data}")
-    
-    # Всегда отвечаем на callback, чтобы убрать кружочек загрузки
     try:
-        # 1. Возврат в категорию (приоритет выше, чем просто открытие категории)
-        if call.data.endswith("_back"):
-            category = call.data.replace("cat_", "").replace("_back", "")
-            logger.debug(f"Возврат в категорию: {category}")
-            
-            items = [name for name, data in PLANTS_DB.items() if data["cat"] == category]
-            
-            markup = types.InlineKeyboardMarkup(row_width=2)
-            for item in items:
-                markup.add(types.InlineKeyboardButton(text=item.capitalize(), callback_data=f"item_{item}"))
-            markup.add(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="back_to_main"))
-            
-            bot.edit_message_text(
-                chat_id=call.message.chat.id, 
-                message_id=call.message.message_id, 
-                text=f"Продукты в категории <b>{category}</b>:", 
-                reply_markup=markup, 
-                parse_mode='HTML'
-            )
-
-        # 2. Обработка нажатия на КАТЕГОРИЮ (главное меню)
-        elif call.data.startswith("cat_"):
+        # 1. Обработка нажатия на КАТЕГОРИЮ (включая возврат в категорию)
+        if call.data.startswith("cat_"):
             category = call.data.replace("cat_", "")
-            logger.debug(f"Выбрана категория: {category}")
-            
             items = [name for name, data in PLANTS_DB.items() if data["cat"] == category]
             
             markup = types.InlineKeyboardMarkup(row_width=2)
@@ -348,45 +318,61 @@ def callback(call):
                 markup.add(types.InlineKeyboardButton(text=item.capitalize(), callback_data=f"item_{item}"))
             markup.add(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="back_to_main"))
             
-            bot.edit_message_text(
+            # Удаляем старое сообщение (фото или текст), чтобы избежать ошибки 400
+            try:
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception:
+                pass # Игнорируем ошибку, если сообщение уже удалено
+            
+            # Отправляем новое текстовое сообщение
+            bot.send_message(
                 chat_id=call.message.chat.id, 
-                message_id=call.message.message_id, 
                 text=f"Продукты в категории <b>{category}</b>:", 
                 reply_markup=markup, 
                 parse_mode='HTML'
             )
 
-        # 3. Обработка нажатия на ПРОДУКТ
+        # 2. Обработка нажатия на ПРОДУКТ
         elif call.data.startswith("item_"):
             plant_name = call.data.replace("item_", "")
-            logger.debug(f"Выбран продукт: {plant_name}")
-            show_plant_options(call.message, plant_name)
+            try:
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception:
+                pass
+            show_plant_options(call.message.chat.id, plant_name)
 
-        # 4. Обработка выбора ЧАСТИ растения
+        # 3. Обработка выбора ЧАСТИ растения
         elif call.data.startswith("part_"):
             data_parts = call.data.replace("part_", "").split("_", 1)
             plant_name = data_parts[0]
             part_name = data_parts[1].replace("_", " ")
-            logger.debug(f"Выбрана часть: {plant_name} - {part_name}")
-            show_part_info(call.message, plant_name, part_name)
+            try:
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception:
+                pass
+            show_part_info(call.message.chat.id, plant_name, part_name)
 
-        # 5. Кнопка "Вся информация"
+        # 4. Кнопка "Вся информация"
         elif call.data.startswith("all_info_"):
             plant_name = call.data.replace("all_info_", "")
-            logger.debug(f"Вся информация о: {plant_name}")
-            show_all_parts_info(call.message, plant_name)
+            try:
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception:
+                pass
+            show_all_parts_info(call.message.chat.id, plant_name)
 
-        # 6. Возврат в главное меню
+        # 5. Возврат в главное меню
         elif call.data == "back_to_main":
-            logger.debug("Возврат в главное меню")
+            try:
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception:
+                pass
             start(call.message)
 
-        else:
-            logger.warning(f"Неизвестный callback: {call.data}")
-            
     except Exception as e:
-        logger.error(f"Ошибка в callback: {str(e)}")
+        print(f"Ошибка в callback: {e}")
     finally:
+        # Всегда отвечаем на callback, чтобы убрать "часики" загрузки у пользователя
         bot.answer_callback_query(call.id)
 
 def show_plant_options(message, plant_name):
