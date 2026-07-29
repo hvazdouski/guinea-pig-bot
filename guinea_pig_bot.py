@@ -335,7 +335,10 @@ def callback(call):
             data_parts = call.data.replace("part_", "").split("_", 1)
             plant_name = data_parts[0]
             part_name = data_parts[1].replace("_", " ")
-            show_part_info(call.message.chat.id, plant_name, part_name)
+            # Получаем категорию из базы данных для корректной кнопки "Назад"
+            plant = PLANTS_DB.get(plant_name)
+            category = plant["cat"] if plant else None
+            show_part_info(call.message.chat.id, plant_name, part_name, category)
 
         # 4. Кнопка "Вся информация"
         elif call.data.startswith("all_info_"):
@@ -364,7 +367,7 @@ def show_plant_options(chat_id, plant_name):
     # Если часть всего одна, сразу показываем информацию
     if len(parts) == 1:
         part_name = list(parts.keys())[0]
-        show_part_info(chat_id, plant_name, part_name, category)
+        show_part_info(chat_id, plant_name, part_name, category=category)
         return
 
     # Если частей больше одной, показываем меню выбора

@@ -1,11 +1,1 @@
-# Игнорировать файл с токеном
-.env
-
-# Игнорировать системные файлы Python
-__pycache__/
-*.pyc
-*.pyo
-
-# Игнорировать виртуальное окружение (если будешь создавать)
-venv/
-env/
+Nothing needs to be added to .gitignore since only a Python source file was modified and no build artifacts, dependencies, or temporary files were detected in the changes.
