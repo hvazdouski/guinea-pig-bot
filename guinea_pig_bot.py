@@ -298,50 +298,49 @@ def start(message):
         reply_markup=markup, 
         parse_mode='HTML'
     )
-
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
-    # 1. Обработка нажатия на КАТЕГОРИЮ
+    # 1. Обработка нажатия на КАТЕГОРИЮ (включая кнопку "Назад в категорию")
     if call.data.startswith("cat_"):
-        category = call.data.replace("cat_", "")
+        # Убираем префикс и лишние пробелы по краям
+        category = call.data.replace("cat_", "").strip()
         
-        # Ищем все продукты, у которых категория совпадает с нажатой кнопкой
-        items = [name for name, data in PLANTS_DB.items() if data["cat"] == category]
+        # Ищем продукты, у которых категория совпадает (также убираем пробелы для сравнения)
+        items = [name for name, data in PLANTS_DB.items() if data["cat"].strip() == category]
         
         markup = types.InlineKeyboardMarkup(row_width=2)
         for item in items:
             markup.add(types.InlineKeyboardButton(text=item.capitalize(), callback_data=f"item_{item}"))
         markup.add(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="back_to_main"))
         
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, 
-                              text=f"Продукты в категории <b>{category}</b>:", reply_markup=markup, parse_mode='HTML')
+        bot.edit_message_text(
+            chat_id=call.message.chat.id, 
+            message_id=call.message.message_id, 
+            text=f"Продукты в категории <b>{category}</b>:", 
+            reply_markup=markup, 
+            parse_mode='HTML'
+        )
 
     # 2. Обработка нажатия на ПРОДУКТ
     elif call.data.startswith("item_"):
-        plant_name = call.data.replace("item_", "")
+        plant_name = call.data.replace("item_", "").strip()
         show_plant_options(call.message.chat.id, plant_name)
 
     # 3. Обработка выбора ЧАСТИ растения
     elif call.data.startswith("part_"):
         data_parts = call.data.replace("part_", "").split("_", 1)
-        plant_name = data_parts[0]
-        part_name = data_parts[1].replace("_", " ")
+        plant_name = data_parts[0].strip()
+        part_name = data_parts[1].replace("_", " ").strip()
         show_part_info(call.message.chat.id, plant_name, part_name)
 
     # 4. Кнопка "Вся информация"
     elif call.data.startswith("all_info_"):
-        plant_name = call.data.replace("all_info_", "")
+        plant_name = call.data.replace("all_info_", "").strip()
         show_all_parts_info(call.message.chat.id, plant_name)
 
     # 5. Возврат в главное меню
     elif call.data == "back_to_main":
         start(call.message)
-    
-    # 6. Возврат в категорию (из деталей продукта)
-    elif call.data.startswith("cat_") and call.data != "cat_": 
-        # Этот блок уже покрыт первым условием, но если ты используешь кнопку "Назад в категорию"
-        # из функции show_plant_options, то она тоже начинается с cat_, так что первый блок её поймает.
-        pass 
 
 def show_plant_options(chat_id, plant_name):
     plant = PLANTS_DB.get(plant_name)
