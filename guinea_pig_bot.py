@@ -133,10 +133,10 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     """Запуск бота"""
-    token = os.environ.get('TELEGRAM_BOT_TOKEN')
+    token = os.environ.get('GuineaPigDietBot')
     
     if not token:
-        logger.error("TELEGRAM_BOT_TOKEN не найден в переменных окружения!")
+        logger.error("GuineaPigDietBot не найден в переменных окружения!")
         return
     
     application = Application.builder().token(token).build()
