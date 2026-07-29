@@ -276,18 +276,27 @@ CATEGORIES = ["🥬 Овощи", "🌿 Травы", "🍎 Фрукты", "🍓 �
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    # Ссылка на приветственную картинку (можно заменить на свою)
+    welcome_image = "https://wsrv.nl/?url=https://images.unsplash.com/photo-1548767797-d8c844163c4c&w=600"
+    
     markup = types.InlineKeyboardMarkup(row_width=2)
     for cat in CATEGORIES:
         markup.add(types.InlineKeyboardButton(text=cat, callback_data=f"cat_{cat}"))
-
+        
     text = (
-        "🐹 **Привет! Я бот-помощник по питанию морских свинок.**\n\n"
+        "🐹 <b>Привет! Я бот-помощник по питанию морских свинок.</b>\n\n"
         "Я помогу тебе понять, можно ли твоему питомцу то или иное растение, овощ, фрукт или ягоду, и в каком количестве.\n\n"
-        "🔍 Как пользоваться:\n\n"
-        "Просто напиши мне название продукта (например: огурец, петрушка, перец), и я выдам подробную информацию о пользе, вреде и норме потребления!" 
-        "Ты так же можешь выбрать интересующую тебя категорию:"
+        "🔍 Как пользоваться:\n\n" "
+        "Просто выбери категорию ниже или напиши название продукта текстом (например: огурец, петрушка, перец), и я выдам подробную информацию о пользе, вреде и норме потребления!!"
     )
-    bot.send_message(message.chat.id, text, reply_markup=markup)
+    
+    # Отправляем фото с подписью и кнопками
+    bot.send_photo(
+        chat_id=message.chat.id, 
+        photo=welcome_image, 
+        caption=text, 
+        reply_markup=markup, 
+        parse_mode='HTML'
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
