@@ -100,6 +100,27 @@ def show_plant_info(chat_id, plant_name):
         except:
             bot.send_message(chat_id, text, reply_markup=markup, parse_mode='HTML')
 
+# === ОБРАБОТЧИК ТЕКСТОВОГО ПОИСКА (УМНЫЙ ПОИСК) ===
+@bot.message_handler(content_types=['text'])
+def handle_text_search(message):
+    query = message.text.strip().lower()
+    
+    # Игнорируем команды, чтобы не искать их как растения
+    if query.startswith('/'):
+        return
+
+    # Получаем список всех названий растений из базы
+    all_plants = list(PLANTS_DB.keys())
+    
+    # Ищем лучшее совпадение с помощью thefuzz
+    match, score = process.extractOne(query, all_plants)
+    
+    # Если совпадение достаточно хорошее (больше 60%)
+    if score > 60:
+        show_plant_info(message.chat.id, match)
+    else:
+        bot.send_message(message.chat.id, f"🤔 Я не нашел '{message.text}'. Попробуй написать точнее или выбери категорию кнопкой.")
+
 # Webhook логика для Render
 app = Flask(__name__)
 @app.route('/', methods=['POST'])
