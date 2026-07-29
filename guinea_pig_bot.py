@@ -271,6 +271,9 @@ CATEGORIES = ["🥬 Овощи", "🌿 Травы", "🍎 Фрукты", "🍓 �
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    start_main_menu(message)
+
+def start_main_menu(message):
     try:
         with open('start.jpg', 'rb') as welcome_image:
             photo_to_send = welcome_image
@@ -317,11 +320,11 @@ def callback(call):
                 markup.add(types.InlineKeyboardButton(text=item.capitalize(), callback_data=f"item_{item}"))
             markup.add(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="back_to_main"))
             
-            # Отправляем новое сообщение вместо редактирования
-            bot.send_message(
-                chat_id=call.message.chat.id, 
-                text=f"Продукты в категории <b>{category}</b>:", 
-                reply_markup=markup, 
+            bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text=f"Продукты в категории <b>{category}</b>:",
+                reply_markup=markup,
                 parse_mode='HTML'
             )
 
@@ -347,7 +350,7 @@ def callback(call):
 
         # 5. Возврат в главное меню
         elif call.data == "back_to_main":
-            start(call.message)
+            start_main_menu(call.message)
 
         bot.answer_callback_query(call.id)
         
@@ -381,11 +384,10 @@ def show_plant_options(chat_id, plant_name):
     markup.add(types.InlineKeyboardButton(text="📋 Вся информация сразу", callback_data=f"all_info_{plant_name}"))
     markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}"))
 
-    bot.send_photo(
-        chat_id, 
-        plant['img'], 
-        caption=f"🌿 <b>{plant_name.capitalize()}</b>\nВыбери часть растения:", 
-        reply_markup=markup, 
+    bot.send_message(
+        chat_id,
+        f"🌿 <b>{plant_name.capitalize()}</b>\nВыбери часть растения:",
+        reply_markup=markup,
         parse_mode='HTML'
     )
 
