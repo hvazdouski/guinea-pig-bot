@@ -324,8 +324,16 @@ def show_plant_options(chat_id, plant_name):
     plant = PLANTS_DB.get(plant_name)
     if not plant: return
 
-    markup = types.InlineKeyboardMarkup(row_width=1)
     parts = plant['parts']
+    
+    # ПРОВЕРКА: Если часть всего одна, сразу показываем информацию о ней
+    if len(parts) == 1:
+        part_name = list(parts.keys())[0]
+        show_part_info(chat_id, plant_name, part_name)
+        return
+
+    # Если частей больше одной, показываем меню выбора
+    markup = types.InlineKeyboardMarkup(row_width=1)
     
     for part_name in parts.keys():
         btn_text = part_name.capitalize()
