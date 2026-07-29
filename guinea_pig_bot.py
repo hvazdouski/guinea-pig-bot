@@ -385,4 +385,118 @@ def callback(call):
             logger.warning(f"Неизвестный callback: {call.data}")
             
     except Exception as e:
-        logger.error(f"Ошибка в
+        logger.error(f"Ошибка в callback: {str(e)}")
+    finally:
+        bot.answer_callback_query(call.id)
+
+def show_plant_options(message, plant_name):
+    plant = PLANTS_DB.get(plant_name)
+    if not plant: 
+        bot.send_message(message.chat.id, "Растение не найдено")
+        return
+
+    parts = plant['parts']
+    category = plant['cat']
+    
+    # Если часть всего одна, сразу показываем информацию
+    if len(parts) == 1:
+        part_name = list(parts.keys())[0]
+        show_part_info(message, plant_name, part_name, category)
+        return
+
+    # Если частей больше одной, показываем меню выбора
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    
+    for part_name in parts.keys():
+        btn_text = part_name.capitalize()
+        safe_part = part_name.replace(" ", "_")
+        markup.add(types.InlineKeyboardButton(text=btn_text, callback_data=f"part_{plant_name}_{safe_part}"))
+    
+    markup.add(types.InlineKeyboardButton(text="📋 Вся информация сразу", callback_data=f"all_info_{plant_name}"))
+    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}_back"))
+
+    bot.send_photo(
+        message.chat.id, 
+        plant['img'], 
+        caption=f"🌿 <b>{plant_name.capitalize()}</b>\nВыбери часть растения:", 
+        reply_markup=markup, 
+        parse_mode='HTML'
+    )
+
+def show_part_info(message, plant_name, part_name, category=None):
+    plant = PLANTS_DB.get(plant_name)
+    if not plant:
+        bot.send_message(message.chat.id, "Растение не найдено")
+        return
+        
+    part_data = plant['parts'].get(part_name)
+    
+    if part_data:
+        text = f"🌿 <b>{plant_name.capitalize()} ({part_name})</b>\n\n{part_data['status']}\n{part_data['info']}\n⚖️ {part_data['norm']}"
+        markup = types.InlineKeyboardMarkup()
+        
+        if category:
+            back_callback = f"cat_{category}_back"
+        else:
+            back_callback = f"item_{plant_name}"
+        
+        markup.add(types.InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback))
+        bot.send_message(message.chat.id, text, reply_markup=markup, parse_mode='HTML')
+
+def show_all_parts_info(message, plant_name):
+    plant = PLANTS_DB.get(plant_name)
+    if not plant:
+        bot.send_message(message.chat.id, "Растение не найдено")
+        return
+        
+    category = plant['cat']
+    
+    text = f"🌿 <b>{plant_name.capitalize()} — Полный гид</b>\n\n"
+    
+    for part, data in plant['parts'].items():
+        text += f"🔸 <b>{part.capitalize()}:</b> {data['status']}\n   {data['info']}\n   ⚖️ {data['norm']}\n\n"
+        
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(text="🔙 Назад в категорию", callback_data=f"cat_{category}_back"))
+    bot.send_message(message.chat.id, text, reply_markup=markup, parse_mode='HTML')
+
+# Умный поиск
+@bot.message_handler(content_types=['text'])
+def handle_text_search(message):
+    query = message.text.strip().lower()
+    if query.startswith('/'): 
+        return
+    
+    all_plants = list(PLANTS_DB.keys())
+    match, score = process.extractOne(query, all_plants)
+    
+    if score > 60:
+        show_plant_options(message, match)
+    else:
+        bot.send_message(message.chat.id, f"🤔 Я не нашел '{message.text}'. Попробуй написать по-другому или выбери категорию.")
+
+# Webhook логика
+app = Flask(__name__)
+
+@app.route('/', methods=['POST'])
+def webhook():
+    json_str = request.get_data().decode('UTF-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return 'OK', 200
+
+@app.route('/')
+def home():
+    return "🐹 Бот работает!"
+
+if __name__ == '__main__':
+    WEBHOOK_URL = os.getenv('WEBHOOK_URL')
+    if WEBHOOK_URL:
+        logger.info(f"Запуск через Webhook: {WEBHOOK_URL}")
+        bot.remove_webhook()
+        bot.set_webhook(url=WEBHOOK_URL)
+        app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
+    else:
+        logger.info("Запуск через Polling (локальный режим)")
+        bot.remove_webhook()
+        bot.polling(none_stop=True, interval=0)
